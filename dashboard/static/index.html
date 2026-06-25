@@ -1,0 +1,1153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>GDELT Sentiment Globe</title>
+    <style>
+        *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+        :root {
+            --color-surface:        #ffffff;
+            --color-background:     #050d1a;
+            --color-text-primary:   #000000;
+            --color-text-label:     #6b7280;
+            --color-text-metadata:  #9ca3af;
+            --color-positive:       #16a34a;
+            --color-negative:       #ef4444;
+            --category-bar-top:     45px;
+        }
+
+        body {
+            background: var(--color-background);
+            color:      #f3f4f6;
+            width:      100vw;
+            height:     100vh;
+            overflow:   hidden;
+            font-family: system-ui, -apple-system, sans-serif;
+        }
+
+
+        /* ---- Globe ---- */
+
+        #globe-container {
+            position:   fixed;
+            inset:      0;
+        }
+
+
+        /* ---- Header ---- */
+
+        header {
+            position: fixed;
+            top:            0;
+            left:           0;
+            right:          0;
+            z-index:        10;
+            display:        flex;
+            flex-direction: column;
+            align-items:    center;
+            padding:        10px 20px;
+            background:     var(--color-surface);
+        }
+
+        header h1 {
+            font-size:      1rem;
+            font-weight:    700;
+            color:          var(--color-text-primary);
+        }
+
+        #header-meta {
+            font-size:      0.8rem;
+            color:          var(--color-text-metadata);
+            margin-top:     2px;
+        }
+
+
+        /* ---- Category Header  ---- */
+
+        #category-bar {
+            position:   fixed;
+            top:        var(--category-bar-top);
+            left:       50%;
+            transform:  translateX(-50%);
+            z-index:    10;
+            display:    flex;
+            gap:        6px;
+            flex-wrap:  wrap;
+            padding:    8px 0;
+        }
+
+        .category-button {
+            font-size:      0.6rem;
+            font-weight:    600;
+            padding:        4px 12px;
+            border-radius:  9999px;
+            border:         none;
+            cursor:         pointer;
+        }
+
+        .category-button.active             { background: rgb(0, 89, 255); color: #fff; }
+        .category-button:not(.active)       { background: #f3f4f6; color: #6b7280; }
+        .category-button:not(.active):hover { background: #c7daff; color: #374151; }
+
+
+        /* ---- Sentiment Scale ---- */
+
+        #sentiment-scale {
+            position:   fixed;
+            bottom:     20px;
+            left:       50%;
+            transform:  translateX(-50%);
+            z-index:    10;
+            padding:    0;
+            pointer-events: none; /* clicks pass through to the globe beneath */
+        }
+
+        #sentiment-scale-title {
+            font-size:      0.7rem;
+            font-weight:    700;
+            color:          #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            text-align:     center;
+            margin-bottom:  8px;
+        }
+
+        #sentiment-scale-bar {
+            width:          min(480px, 80vw);
+            height:         12px;
+            border-radius:  8px;
+            background:     linear-gradient(to right, #a50026, #d73027, #f46d43, #ffffbf, #a6d96a, #1a9641, #00441b);
+        }
+
+        #sentiment-scale-ticks {
+            display:            flex;
+            justify-content:    space-between;
+            width:              min(480px, 80vw);
+            margin-top:         4px;
+        }
+
+        .sentiment-scale-tick {
+            display:        flex;
+            flex-direction: column;
+            align-items:    center;
+            gap:            2px;
+        }
+
+        .sentiment-scale-tick-line {
+            width:      1px;
+            height:     4px;
+            background: #f3f4f6;
+        }
+
+        .sentiment-scale-tick span {
+            font-size:  0.7rem;
+            color:      #ffffff;
+        }
+
+        /* ---- Sidebar ---- */
+
+        aside {
+            position:   fixed;
+            top:        0;
+            right:      0;
+            bottom:     0;
+            width:      0; /* hidden by default; JS sets width to SIDEBAR_WIDTH to open */
+            background: var(--color-surface);
+            overflow:   hidden;
+            display:    flex;
+            flex-direction: column;
+            z-index:    10;
+            transition: width 0.25s ease;
+        }
+
+        .sidebar-header {
+            display:            flex;
+            align-items:        flex-start;
+            justify-content:    space-between;
+            padding:            30px 20px 16px;
+            flex-shrink:        0;
+        }
+
+        #sidebar-country-name {
+            font-size:      1rem;
+            font-weight:    700;
+            color:          var(--color-text-primary);
+        }
+
+        #sidebar-country-subtitle {
+            font-size:  0.8rem;
+            color:      var(--color-text-metadata);
+            margin-top: 2px;
+        }
+
+        .sidebar-close {
+            font-size:      1rem;
+            line-height:    1;
+            color:          #d1d5db;
+            margin-top:     2px;
+            margin-left:    12px;
+            flex-shrink:    0;
+            border:         none;
+            background:     transparent;
+            cursor:         pointer;
+        }
+
+        .sidebar-close:hover { 
+            color: #000000; 
+        }
+
+        #sidebar-content {
+            display:        flex;
+            flex-direction: column;
+            flex:           1;
+            overflow:       hidden;
+        }
+
+
+        /* Sidebar sections (built in JS) */
+
+        .sidebar-tone-row {
+            display:        flex;
+            align-items:    center;
+            gap:            8px;
+            padding:        12px 20px;
+        }
+
+        .sidebar-tone-dot {
+            width:          10px;
+            height:         10px;
+            border-radius:  50%;
+            border:         1px solid rgb(0, 0, 0);
+            flex-shrink:    0;
+        }
+
+        .sidebar-tone-value { 
+            font-size:              0.9rem; 
+            font-weight:            700; 
+            -webkit-text-stroke:    0.5px rgb(0, 0, 0); 
+        }
+
+        .sidebar-tone-label {
+            font-size:      0.8rem;
+            color:          var(--color-text-label);
+            font-weight:    500;
+        }
+
+        .sidebar-stat-block {
+            background: #f9fafb;
+            padding:    12px 16px;
+        }
+
+        .sidebar-stat-label {
+            font-size:      0.6rem;
+            color:          var(--color-text-metadata);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom:  2px;
+        }
+
+        .sidebar-stat-count {
+            font-size:      1.5rem;
+            font-weight:    700;
+            color:          var(--color-text-primary);
+        }
+
+        .sidebar-stat-pos-neg   { display: flex; gap: 8px; margin-top: 4px; }
+        .sidebar-stat-positive  { font-size: 0.75rem; font-weight: 600; color: var(--color-positive); }
+        .sidebar-stat-separator { font-size: 0.75rem; color: #d1d5db; }
+        .sidebar-stat-negative  { font-size: 0.75rem; font-weight: 600; color: var(--color-negative); }
+
+        .sidebar-category-chips {
+            padding:    12px 20px 8px;
+            display:    flex;
+            flex-wrap:  wrap;
+            gap:        6px;
+        }
+
+        .sidebar-category-button {
+            font-size:      0.625rem;
+            font-weight:    600;
+            padding:        4px 10px;
+            border-radius:  9999px;
+            border:         none;
+            cursor:         pointer;
+        }
+
+        .sidebar-category-button.active             { background: #000000; color: #fff; }
+        .sidebar-category-button:not(.active)       { background: #f3f4f6; color: #6b7280; }
+        .sidebar-category-button:not(.active):hover { background: #e5e7eb; }
+
+
+        /* tabs to sort articles by most positive or most negative tone */
+        .sidebar-sort-tabs { 
+            display: flex; 
+            border-bottom: 1px 
+            solid var(--color-border-light); 
+        }
+
+        .sidebar-sort-tab {
+            flex: 1;
+            padding: 8px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+        }
+
+        .sidebar-sort-tab.active       { border-bottom: 2px solid #111827; color: #111827; background: #ffffff; }
+        .sidebar-sort-tab:not(.active) { color: var(--color-text-metadata); background: #f9fafb; }
+
+        .sidebar-articles-section { padding: 16px 20px; flex: 1; overflow-y: auto; }
+
+
+        /* ---- Articles ---- */
+
+        article.article-item {
+            padding: 12px 0;
+        }
+
+        article.article-item:last-child { 
+            border-bottom: none; 
+        }
+
+        .article-header {
+            display:            flex;
+            justify-content:    space-between;
+            align-items:        center;
+            gap:                8px;
+            margin-bottom:      4px;
+        }
+
+        .article-source {
+            font-size:      0.6875rem;
+            font-weight:    00;
+            color:          var(--color-text-label);
+            overflow:       hidden;
+            text-overflow:  ellipsis;
+            white-space:    nowrap;
+        }
+
+        .article-badges { 
+            display:        flex; 
+            gap:            4px; 
+            align-items:    center; 
+            flex-shrink:    0; 
+        }
+
+        .badge {
+            font-size:      0.7rem;
+            font-weight:    700;
+            padding:        2px 6px;
+            border-radius:  4px;
+            flex-shrink:    0;
+        }
+
+        .badge--positive    { background: #f0fdf4; color: #15803d; }
+        .badge--negative    { background: #fef2f2; color: #dc2626; }
+        .badge--politics    { background: #f5f3ff; color: #7c3aed; }
+        .badge--economy     { background: #eff6ff; color: #1d4ed8; }
+        .badge--health      { background: #f0fdf4; color: #15803d; }
+        .badge--crime       { background: #fef2f2; color: #dc2626; }
+        .badge--default     { background: #f9fafb; color: #6b7280; }
+        .badge--words       { background: transparent; color: var(--color-text-metadata); font-weight: 400; }
+
+        .article-link {
+            font-size:      0.6875rem;
+            color:          var(--color-text-metadata);
+            overflow:       hidden;
+            text-overflow:  ellipsis;
+            white-space:    nowrap;
+            display:        block;
+            line-height:    1.4;
+            text-decoration: none;
+        }
+
+        .article-link:hover { 
+            color: #3b82f6; 
+        }
+
+        #load-more-button {
+            display:        none;
+            width:          100%;
+            margin-top:     12px;
+            padding:        8px;
+            font-size:      0.75rem;
+            color:          var(--color-text-metadata);
+            background:     #f9fafb;
+            border-radius:  8px;
+            cursor:         pointer;
+        }
+
+        #load-more-button:hover { 
+            color: #374151; 
+        }
+
+
+        /* ---- Tooltip ---- */
+
+        #tooltip {
+            position:       fixed;
+            pointer-events: none;
+            display:        none;
+            z-index:        20;
+            background:     rgb(0, 0, 0);
+            border-radius:  8px;
+            padding:        8px 12px;
+            max-width:      240px;
+        }
+
+        #tooltip-country {
+            font-size:      0.75rem;
+            font-weight:    700;
+            color:          #fff;
+            margin-bottom:  2px;
+        }
+
+        #tooltip-tone-value { 
+            font-size: 0.75rem; 
+        }
+
+
+        /* ---- Utility ---- */
+
+        .text-status { 
+            font-size:  0.75rem; 
+            color:      var(--color-text-metadata); 
+        }
+
+        .text-error { 
+            font-size:  0.75rem; 
+            color:      var(--color-negative); 
+        }
+    </style>
+</head>
+<body>
+
+<div id="globe-container"></div>
+
+<header id="header">
+    <h1>GDELT Sentiment Globe</h1>
+    <div id="header-meta"></div>
+</header>
+
+<nav id="category-bar">
+    <button class="category-button active" onclick="setCategory('all')">All</button>
+    <button class="category-button" onclick="setCategory('politics')">Politics</button>
+    <button class="category-button" onclick="setCategory('economy')">Economy</button>
+    <button class="category-button" onclick="setCategory('health')">Health</button>
+    <button class="category-button" onclick="setCategory('crime')">Crime</button>
+</nav>
+
+<div id="sentiment-scale">
+    <div id="sentiment-scale-title" class="sentiment-scale-title">Overall Sentiment Tone</div>
+    <div id="sentiment-scale-bar"></div>
+    <div id="sentiment-scale-ticks">
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>+4</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>+3</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>+2</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>+1</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>0</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>−1</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>−2</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>−3</span></div>
+        <div class="sentiment-scale-tick"><div class="sentiment-scale-tick-line"></div><span>−4</span></div>
+    </div>
+</div>
+
+<aside id="sidebar">
+    <div class="sidebar-header">
+        <div>
+            <h2 id="sidebar-country-name"></h2>
+            <div id="sidebar-country-subtitle"></div>
+        </div>
+        <button class="sidebar-close" onclick="closeSidebar()">&#x2715;</button>
+    </div>
+    <div id="sidebar-content"></div>
+</aside>
+
+<div id="tooltip">
+    <div id="tooltip-country"></div>
+    <div id="tooltip-tone-value"></div>
+</div>
+
+<script src="//unpkg.com/globe.gl"></script>
+<script>
+
+
+// ---- Tone color scale ----
+
+// Color control points from deep red (−4) to dark green (+4). Used to color countries and tone values.
+const TONE_ANCHORS = [
+    [-4, [165,   0,  38]],
+    [-3, [215,  48,  39]],
+    [-2, [244, 109,  67]],
+    [-1, [253, 174,  97]],
+    [ 0, [255, 255, 191]],
+    [ 1, [166, 217, 106]],
+    [ 2, [102, 189,  99]],
+    [ 3, [ 26, 150,  65]],
+    [ 4, [  0, 104,  55]],
+];
+
+// Display text for the sentiment scale title and sidebar tone label, per category.
+const CATEGORY_LABELS = {
+    all:        'Overall Sentiment Tone',
+    politics:   'Politics Sentiment Tone',
+    economy:    'Economy Sentiment Tone',
+    health:     'Health Sentiment Tone',
+    crime:      'Crime Sentiment Tone',
+};
+
+// CSS badge class for each category, used to color the category badge on each article card.
+const CATEGORY_BADGE_CLASSES = {
+    politics:   'badge--politics',
+    economy:    'badge--economy',
+    health:     'badge--health',
+    crime:      'badge--crime',
+};
+
+// Converts a color channel value (0–255) to a 2-character hex string, e.g. 255 -> 'ff'.
+function toHexComponent(value) {
+    return Math.round(value).toString(16).padStart(2, '0');
+}
+
+// Returns a hex color for a given tone score by blending between the two nearest color anchors.
+function getToneColor(tone) {
+    if (tone === null || tone === undefined) return '#1a1a3a';
+    const clamped = Math.max(-4, Math.min(4, tone));
+    for (let anchorIndex = 0; anchorIndex < TONE_ANCHORS.length - 1; anchorIndex++) {
+        const [anchorTone, anchorColor] = TONE_ANCHORS[anchorIndex];
+        const [nextTone,   nextColor]   = TONE_ANCHORS[anchorIndex + 1];
+        if (clamped <= nextTone) {
+            const fraction = (clamped - anchorTone) / (nextTone - anchorTone);
+            const red   = toHexComponent(anchorColor[0] + fraction * (nextColor[0] - anchorColor[0]));
+            const green = toHexComponent(anchorColor[1] + fraction * (nextColor[1] - anchorColor[1]));
+            const blue  = toHexComponent(anchorColor[2] + fraction * (nextColor[2] - anchorColor[2]));
+            return '#' + red + green + blue;
+        }
+    }
+    return '#00441b';
+}
+
+// Returns the tone score for the active category from a country's GeoJSON properties.
+function getFeatureTone(properties) {
+    if (currentCategory === 'all') return properties.avg_tone;
+    return properties[currentCategory + '_tone'];
+}
+
+// Returns the article count for the active category from a country's GeoJSON properties.
+function getFeatureCount(properties) {
+    if (currentCategory === 'all') return properties.article_count;
+    return properties[currentCategory + '_count'] || 0;
+}
+
+// Returns the country display name from GeoJSON properties, trying ADMIN then NAME as fallback.
+function getCountryName(properties) {
+    return properties.ADMIN || properties.NAME || '';
+}
+
+
+/*  
+Returns a data URL of a solid blue 2×2 canvas used as the ocean texture.
+globe.gl requires an image URL for the globe surface.
+*/
+function buildOceanTexture() {
+    const canvas    = document.createElement('canvas');
+    canvas.width    = 2;
+    canvas.height   = 2;
+    const context   = canvas.getContext('2d');
+    context.fillStyle = '#1a6fa8';
+    context.fillRect(0, 0, 2, 2);
+    return canvas.toDataURL();
+}
+
+
+/* ---- State ---- */
+
+let currentCategory     = 'all';
+let currentCountryCode  = null;
+let currentOffset       = 0;
+let currentTotal        = 0;
+let currentSort         = 'positive';
+let sidebarCategory     = 'all';
+let selectedCountryName = null;
+let isSidebarOpen       = false;
+let mouseX              = 0;
+let currentAltitude     = 2.2; 
+const PER_PAGE          = 15;
+const SIDEBAR_WIDTH     = 340;
+
+
+/* ---- Category filter (header bar) ---- */
+
+/*
+[function setCategory]
+-When is it called?
+    When the user clicks a category button in the header bar (All / Politics / Economy / Health / Crime).
+
+-What it does:
+    1. Updates currentCategory state
+    2. Marks the clicked button as active
+    3. Updates the sentiment scale title text
+    4. Re-colors the globe for the new category
+    5. Refreshes the sidebar if a country is already open
+*/
+
+function setCategory(category) {
+    currentCategory = category;
+    sidebarCategory = category;
+
+    document.querySelectorAll('.category-button').forEach(function(button) {
+        const isActive = button.textContent.toLowerCase() === category ||
+            (category === 'all' && button.textContent === 'All');
+        button.classList.toggle('active', isActive);
+    });
+
+    document.getElementById('sentiment-scale-title').textContent =
+        CATEGORY_LABELS[category] || 'Sentiment Tone';
+
+    if (window._applySelectionToGlobe) {
+        window._applySelectionToGlobe();
+    }
+
+    if (currentCountryCode) {
+        currentOffset = 0;
+        showSidebar(window._lastProps, false);
+    }
+}
+
+
+/* ---- Category filter (Side bar) ---- */
+
+/*
+[function setSidebarCategory]
+-When is it called?
+    When the user clicks a category chip inside the sidebar (All / Politics / Economy / Health / Crime).
+
+-What it does:
+    Filters the article list and tone display for the selected country without changing the globe view.
+*/
+function setSidebarCategory(category) {
+    sidebarCategory = category;
+    currentOffset   = 0;
+
+    document.querySelectorAll('.sidebar-category-button').forEach(function(button) {
+        button.classList.toggle('active', button.dataset.category === category);
+    });
+
+    const properties = window._lastProps;
+    if (properties) {
+        const categoryCount = category === 'all'
+            ? properties.article_count
+            : (properties[category + '_count'] || 0);
+        const categoryTone = category === 'all'
+            ? properties.avg_tone
+            : properties[category + '_tone'];
+
+        const toneString = categoryTone == null
+            ? 'No data'
+            : (categoryTone >= 0
+                ? '+' + (+categoryTone).toFixed(2)
+                : (+categoryTone).toFixed(2));
+        const toneColor    = getToneColor(categoryTone);
+        const categoryLabel = category === 'all' ? 'all categories' : category;
+
+        const articleCountElement = document.getElementById('stat-article-count');
+        if (articleCountElement) {
+            articleCountElement.textContent = (+categoryCount).toLocaleString();
+        }
+
+        const toneValueElement = document.getElementById('stat-sidebar-tone-value');
+        if (toneValueElement) {
+            toneValueElement.textContent  = toneString;
+            toneValueElement.style.color  = (
+                categoryTone != null && categoryTone > -1 && categoryTone < 1
+                    ? '#374151'
+                    : toneColor
+            );
+        }
+
+        const toneLabelElement = document.getElementById('stat-sidebar-tone-label');
+        if (toneLabelElement) {
+            toneLabelElement.textContent = categoryLabel + ' tone';
+        }
+
+        document.getElementById('sidebar-country-subtitle').textContent = categoryCount
+            ? (+categoryCount).toLocaleString() + ' articles · ' + categoryLabel
+            : 'No data for ' + categoryLabel;
+    }
+
+    fetchArticles(false);
+    fetchPositiveNegativeCounts();
+}
+
+
+/* ---- Sort tabs ---- */
+
+/*
+[function setSort]
+-When is it called?
+    When the user clicks the Positive or Negative sort tab inside the sidebar.
+
+-What it does:
+    1. Updates currentSort state and resets to the first page
+    2. Marks the clicked tab as active
+    3. Re-fetches articles in the new sort order
+*/
+function setSort(sort) {
+    currentSort   = sort;
+    currentOffset = 0;
+
+    document.querySelectorAll('.sidebar-sort-tab').forEach(function(button) {
+        button.classList.toggle('active', button.dataset.sort === sort);
+    });
+
+    fetchArticles(false);
+}
+
+
+/* ---- Sidebar open / close ---- */
+
+/*
+[function deselect]
+-When is it called?
+    When the sidebar is closed (via closeSidebar).
+
+What it does:
+    Clears the selected country highlight on the globe.
+*/
+function deselect() {
+    selectedCountryName = null;
+    if (!window._globe || !window._applySelectionToGlobe) return;
+    window._applySelectionToGlobe();
+}
+
+/*[function closeSidebar]
+-When is it called?
+    When the user clicks the × button, clicks the same country again, or clicks the globe background.
+
+What it does:
+    Collapses the sidebar, restores header/scale/category-bar visibility, and deselects the country.
+*/
+function closeSidebar() {
+    document.getElementById('sidebar').style.width = '0';
+    document.getElementById('header').style.opacity             = currentAltitude > 1.5 ? '1' : '0';
+    document.getElementById('sentiment-scale').style.opacity    = '1';
+    document.getElementById('category-bar').style.opacity       = '1';
+    document.getElementById('category-bar').style.pointerEvents = 'auto';
+    currentCountryCode  = null;
+    isSidebarOpen       = false;
+    deselect();
+}
+
+/*
+[function showSidebar]
+-When is it called?
+    When the user clicks a country on the globe.
+
+-What it does:
+    1. Populates the sidebar with tone, article count, category chips, sort tabs, and article list for the selected country
+    2. Dims the header, sentiment scale, and category bar
+    3. Fetches articles and positive/negative counts from the API
+*/
+function showSidebar(properties, resetSort) {
+    if (resetSort === undefined) resetSort = true;
+    window._lastProps = properties;
+
+    if (resetSort) {
+        currentSort     = 'positive';
+        sidebarCategory = currentCategory === 'all' ? 'all' : currentCategory;
+    }
+
+    const tone          = getFeatureTone(properties);
+    const toneString    = tone == null
+        ? 'No data'
+        : (tone >= 0 ? '+' + (+tone).toFixed(2) : (+tone).toFixed(2));
+    const toneColor     = getToneColor(tone);
+    const count         = getFeatureCount(properties);
+    const categoryLabel = currentCategory === 'all' ? 'all categories' : currentCategory;
+    document.getElementById('sidebar-country-name').textContent     = getCountryName(properties) || 'Unknown';
+    document.getElementById('sidebar-country-subtitle').textContent = count
+        ? (+count).toLocaleString() + ' articles · ' + categoryLabel
+        : 'No data for ' + categoryLabel;
+
+    let html = '<div class="sidebar-tone-row">'
+        + '<div class="sidebar-tone-dot" style="background:' + toneColor + '"></div>'
+        + '<span id="stat-sidebar-tone-value" class="sidebar-tone-value" style="color:' + toneColor + '">' + toneString + '</span>'
+        + '<span id="stat-sidebar-tone-label" class="sidebar-tone-label">' + categoryLabel + ' tone</span>'
+        + '</div>';
+
+    if (tone != null) {
+        html += '<div class="sidebar-stat-block">'
+            + '<div class="sidebar-stat-label">Articles</div>'
+            + '<div id="stat-article-count" class="sidebar-stat-count">' + (+count).toLocaleString() + '</div>'
+            + '<div class="sidebar-stat-pos-neg" id="sidebar-stat-positive-negative">'
+            + '<span class="sidebar-stat-positive" id="sidebar-stat-positive-count">-</span>'
+            + '<span class="sidebar-stat-separator">|</span>'
+            + '<span class="sidebar-stat-negative" id="sidebar-stat-negative-count">-</span>'
+            + '</div>'
+            + '</div>';
+    }
+
+    // Category chips; only shown when globe is set to "All"
+    if (currentCategory === 'all') {
+        html += '<div class="sidebar-category-chips">';
+        ['all', 'politics', 'economy', 'health', 'crime'].forEach(function(chip) {
+            const chipLabel   = chip === 'all' ? 'All' : chip.charAt(0).toUpperCase() + chip.slice(1);
+            const activeClass = sidebarCategory === chip ? ' active' : '';
+            html += '<button class="sidebar-category-button' + activeClass + '" data-category="' + chip + '"'
+                + ' onclick="setSidebarCategory(\'' + chip + '\')">' + chipLabel + '</button>';
+        });
+        html += '</div>';
+    }
+
+    html += '<div class="sidebar-sort-tabs">'
+        + '<button class="sidebar-sort-tab' + (currentSort === 'positive' ? ' active' : '') + '" data-sort="positive" onclick="setSort(\'positive\')">Positive</button>'
+        + '<button class="sidebar-sort-tab' + (currentSort === 'negative' ? ' active' : '') + '" data-sort="negative" onclick="setSort(\'negative\')">Negative</button>'
+        + '</div>';
+
+    html += '<div class="sidebar-articles-section">'
+        + '<div id="articles-list"><p class="text-status">Loading...</p></div>'
+        + '<button id="load-more-button" onclick="loadMore()">Load more</button>'
+        + '</div>';
+
+    document.getElementById('sidebar-content').innerHTML = html;
+    document.getElementById('sidebar').style.width = SIDEBAR_WIDTH + 'px';
+    isSidebarOpen = true;
+    document.getElementById('header').style.opacity       = currentAltitude > 1.5 ? '0.2' : '0';
+    document.getElementById('sentiment-scale').style.opacity       = '0.2';
+    document.getElementById('category-bar').style.opacity        = '0';
+    document.getElementById('category-bar').style.pointerEvents  = 'none';
+
+    if (properties.country_code) {
+        currentCountryCode = properties.country_code;
+        if (resetSort) currentOffset = 0;
+        fetchArticles(false);
+        fetchPositiveNegativeCounts();
+    } else {
+        document.getElementById('articles-list').innerHTML =
+            '<p class="text-status">No articles available.</p>';
+    }
+}
+
+
+/* ---- Data fetching ---- */
+
+/*
+[function fetchPositiveNegativeCounts]
+-When is it called?
+    When the sidebar opens for a country (via showSidebar), and when the sidebar category filter changes.
+
+-What it does:
+    1. Sends two parallel requests to get the total positive and negative article counts for the open country
+    2. Updates the +positive / negative count labels in the sidebar stat block
+*/
+
+async function fetchPositiveNegativeCounts() {
+    if (!currentCountryCode) return;
+    const categoryParam = (sidebarCategory && sidebarCategory !== 'all')
+        ? '&category=' + sidebarCategory
+        : '';
+    try {
+        const [positiveResponse, negativeResponse] = await Promise.all([
+            fetch('/api/articles/' + currentCountryCode + '?limit=1&sort=positive' + categoryParam),
+            fetch('/api/articles/' + currentCountryCode + '?limit=1&sort=negative' + categoryParam),
+        ]);
+        const positiveData = await positiveResponse.json();
+        const negativeData = await negativeResponse.json();
+
+        const positiveCountElement = document.getElementById('sidebar-stat-positive-count');
+        const negativeCountElement = document.getElementById('sidebar-stat-negative-count');
+        if (positiveCountElement) positiveCountElement.textContent = '+' + positiveData.total.toLocaleString() + ' positive';
+        if (negativeCountElement) negativeCountElement.textContent = negativeData.total.toLocaleString() + ' negative';
+    } catch {
+        // Silently ignore — counts are non-critical
+    }
+}
+
+/*
+[function fetchArticles]
+-When is it called?
+    When the sidebar opens, when the category or sort changes, and when the user clicks "Load more".
+
+-What it does:
+    1. Requests a page of articles for the open country, filtered by category and sorted by currentSort
+    2. Renders the articles into the sidebar list (appending or replacing depending on appendToExisting)
+    3. Updates the "load more" button based on whether more pages remain
+*/
+async function fetchArticles(appendToExisting) {
+    const categoryParam = (sidebarCategory && sidebarCategory !== 'all')
+        ? '&category=' + sidebarCategory
+        : '';
+    try {
+        const response = await fetch(
+            '/api/articles/' + currentCountryCode
+            + '?offset=' + currentOffset
+            + '&limit=' + PER_PAGE
+            + '&sort=' + currentSort
+            + categoryParam
+        );
+        if (!response.ok) throw new Error('API error');
+        const data = await response.json();
+        currentTotal = data.total;
+        renderArticles(data.articles, appendToExisting);
+        updateLoadMoreButton(currentOffset + data.articles.length);
+    } catch {
+        document.getElementById('articles-list').innerHTML =
+            '<p class="text-error">Failed to load.</p>';
+    }
+}
+
+
+/* ---- Article rendering ---- */
+
+/*
+[function renderArticles]
+-When is it called?
+    After fetchArticles receives a response from the API.
+
+-What it does:
+    1. Clears the article list (or appends if loading more pages)
+    2. Builds each article card with source, URL, tone badge, category badge, and word count badge
+    3. Shows "No articles available" if the result is empty
+*/
+function renderArticles(articles, appendToExisting) {
+    const listElement = document.getElementById('articles-list');
+    if (!appendToExisting) listElement.innerHTML = '';
+
+    if (!articles.length && !appendToExisting) {
+        listElement.innerHTML = '<p class="text-status">No articles available.</p>';
+        return;
+    }
+
+    articles.forEach(function(article) {
+        const isPositive        = article.tone >= 0;
+        const toneString        = isPositive ? '+' + article.tone.toFixed(2) : article.tone.toFixed(2);
+        const toneBadge         = '<span class="badge ' + (isPositive ? 'badge--positive' : 'badge--negative') + '">' + toneString + '</span>';
+        const categoryClass     = CATEGORY_BADGE_CLASSES[article.category] || 'badge--default';
+        const categoryBadge     = article.category
+            ? '<span class="badge ' + categoryClass + '">' + article.category + '</span>'
+            : '';
+        const wordCountBadge    = article.word_count
+            ? '<span class="badge badge--words">' + article.word_count.toLocaleString() + ' words</span>'
+            : '';
+
+        const articleElement = document.createElement('article');
+        articleElement.className = 'article-item';
+        articleElement.innerHTML =
+            '<div class="article-header">'
+            + '<span class="article-source">' + article.source + '</span>'
+            + '<div class="article-badges">' + categoryBadge + toneBadge + wordCountBadge + '</div>'
+            + '</div>'
+            + '<a href="' + article.url + '" target="_blank" rel="noopener" class="article-link">'
+            + article.url + '</a>';
+
+        listElement.appendChild(articleElement);
+    });
+}
+
+/*
+[function updateLoadMoreButton]
+-When is it called?
+    After renderArticles function, once the shown count is known.
+
+-What it does:
+    1. Shows or hides the "Load more" button based on whether unshown articles remain
+    2. Updates the button label with the current shown / total count
+
+*/
+function updateLoadMoreButton(shownCount) {
+    const button = document.getElementById('load-more-button');
+    if (!button) return;
+    button.style.display    = shownCount < currentTotal ? 'block' : 'none';
+    button.textContent      = 'Load more (' + shownCount + ' / ' + currentTotal + ')';
+}
+
+/*
+[function loadMore]
+-When is it called?
+    When the user clicks the "Load more" button.
+
+-What it does:
+    Advances the page offset and fetches the next page, appending results to the existing list
+*/
+async function loadMore() {
+    currentOffset += PER_PAGE;
+    await fetchArticles(true);
+}
+
+
+// ---- Initialisation ----
+
+/*
+[function init]
+-When is it called?
+    Once on page load, at the bottom of the script.
+
+-What it does:
+    1. Fetches sentiment data from the API and populates the header date/country/article count
+    2. Builds the globe with country polygons colored by tone
+    3. Wires up click (open sidebar), hover (show tooltip), and globe-click (close sidebar) handlers
+    4. Tracks zoom level to show/hide the header and sentiment scale title
+    5. Handles window resize to keep the globe full-screen
+    6. Hides the tooltip when the cursor moves over the open sidebar
+*/
+async function init() {
+    const sentimentResponse = await fetch('/api/sentiment');
+    const sentimentData     = await sentimentResponse.json();
+    const metadata          = sentimentData.meta || {};
+
+    if (metadata.window_start) {
+        document.getElementById('header-meta').textContent =
+            metadata.window_start.slice(0, 10)
+            + ' · ' + (metadata.countries || 0) + ' countries'
+            + ' · ' + (metadata.total_articles || 0).toLocaleString() + ' articles';
+    }
+
+    const globeContainer = document.getElementById('globe-container');
+    const tooltipElement = document.getElementById('tooltip');
+
+    function getPolygonCapColor(feature) {
+        const baseColor = getToneColor(getFeatureTone(feature.properties));
+        if (selectedCountryName && getCountryName(feature.properties) !== selectedCountryName) {
+            return baseColor + '55'; //dim the non-selected countries
+        }
+        return baseColor;
+    }
+
+    function getPolygonSideColor() {
+        return 'rgba(0,0,0,0.3)';
+    }
+
+    function getPolygonStrokeColor(feature) {
+        if (selectedCountryName && getCountryName(feature.properties) === selectedCountryName) {
+            return '#ffffff';
+        }
+        if (selectedCountryName) return 'rgba(255,255,255,0.02)';
+        return 'rgba(255,255,255,0.1)';
+    }
+
+    function getPolygonAltitude(feature) {
+        if (selectedCountryName && getCountryName(feature.properties) === selectedCountryName) {
+            return 0.012;
+        }
+        return 0.006;
+    }
+
+    function applySelectionToGlobe() {
+        const currentData = window._globe.polygonsData();
+        window._globe
+            .polygonCapColor(getPolygonCapColor)
+            .polygonStrokeColor(getPolygonStrokeColor)
+            .polygonAltitude(getPolygonAltitude)
+            .polygonsData(currentData.slice()); 
+    }
+
+
+    window._applySelectionToGlobe = applySelectionToGlobe;
+
+    /*
+    [function onPolygonClick]
+    -When is it called?
+        When the user clicks a country polygon on the globe.
+
+    What it does:
+        1. If the same country is clicked again, closes the sidebar
+        2. Otherwise, highlights the country and opens the sidebar for it
+    */
+    function onPolygonClick(polygon) {
+        if (!polygon) return;
+        const countryName = getCountryName(polygon.properties);
+        if (!countryName) return;
+        if (selectedCountryName === countryName) {
+            closeSidebar();
+            return;
+        }
+        selectedCountryName = countryName;
+        applySelectionToGlobe();
+        showSidebar(polygon.properties, true);
+    }
+
+    /*
+    [function onPolygonHover]
+    -When is it called?
+        When the user moves the mouse over a country polygon on the globe.
+
+    What it does:
+        1. Changes the cursor to a pointer over a country, or resets it to default
+        2. Shows the tooltip with the country name, tone, and article count
+        3. Hides the tooltip if the cursor is over the open sidebar or not over a country
+    */
+    function onPolygonHover(polygon) {
+        document.body.style.cursor = (polygon && getCountryName(polygon.properties)) ? 'pointer' : 'default';
+
+        const sidebarObscured = isSidebarOpen && mouseX >= window.innerWidth - SIDEBAR_WIDTH;
+        if (polygon && !sidebarObscured) {
+            const properties = polygon.properties;
+            const tone       = getFeatureTone(properties);
+            const count      = getFeatureCount(properties);
+            const toneString = tone == null
+                ? 'No data'
+                : (tone >= 0 ? '+' + (+tone).toFixed(2) : (+tone).toFixed(2));
+            const categoryLabel = currentCategory === 'all' ? 'overall' : currentCategory;
+
+            document.getElementById('tooltip-country').textContent = getCountryName(properties);
+
+            const tooltipToneElement = document.getElementById('tooltip-tone-value');
+            tooltipToneElement.style.color  = getToneColor(tone);
+            tooltipToneElement.textContent  = tone == null
+                ? 'No data'
+                : toneString + ' ' + categoryLabel + ' tone · ' + ((+count || 0).toLocaleString()) + ' articles';
+
+            tooltipElement.style.display = 'block';
+        } else {
+            tooltipElement.style.display = 'none';
+        }
+    }
+
+    const globe = Globe()
+        .width(window.innerWidth)
+        .height(window.innerHeight)
+        .backgroundColor('#050d1a')
+        .globeImageUrl(buildOceanTexture())
+        .polygonsData(sentimentData.features)
+        .polygonCapColor(getPolygonCapColor)
+        .polygonSideColor(getPolygonSideColor)
+        .polygonStrokeColor(getPolygonStrokeColor)
+        .polygonAltitude(getPolygonAltitude)
+        .onPolygonClick(onPolygonClick)
+        .onGlobeClick(closeSidebar)
+        .onPolygonHover(onPolygonHover)
+        (globeContainer);
+
+    window._globe = globe;
+    globe.pointOfView({ lat: 15, lng: -85, altitude: 2.2 });
+    globe.controls().maxDistance = 500; // max zoom out
+
+    globe.onZoom(function(zoomState) {
+        currentAltitude = zoomState.altitude;
+        const isZoomedOut = currentAltitude > 1.5;
+        document.getElementById('header').style.opacity       = isZoomedOut ? (isSidebarOpen ? '0.2' : '1') : '0';
+        document.getElementById('sentiment-scale-title').style.opacity = isZoomedOut ? '1' : '0';
+    });
+
+    window.addEventListener('resize', function() {
+        globe.width(window.innerWidth).height(window.innerHeight);
+    });
+
+    window.addEventListener('mousemove', function(event) {
+        mouseX = event.clientX;
+        tooltipElement.style.left = (event.clientX + 14) + 'px';
+        tooltipElement.style.top  = (event.clientY - 10) + 'px';
+        if (isSidebarOpen && mouseX >= window.innerWidth - SIDEBAR_WIDTH) {
+            tooltipElement.style.display = 'none';
+        }
+    });
+}
+
+init();
+</script>
+</body>
+</html>
