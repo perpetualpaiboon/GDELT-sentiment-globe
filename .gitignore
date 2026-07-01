@@ -1,0 +1,19 @@
+# --- Virtual Environments ---
+.venv/
+
+
+# --- Environment Variables ---
+.env
+
+
+# --- Python ---
+__pycache__/
+*.pyc
+
+# --- Airflow ---
+logs/
+config/
+
+# --- Pipeline data ---
+pipeline/
+
